@@ -4,6 +4,9 @@
 ### 0. 가장 기본적인 Generative Adversarial Model
 
 ### 1. DCGAN: Deep Convolution GAN
+- [Radford, A., Metz, L., & Chintala, S. (2015). Unsupervised representation learning with deep convolutional generative adversarial networks. arXiv preprint arXiv:1511.06434.]
+
+<img src="./resources/DCGAN_1.PNG"  width="700" height="370">
 
 ### 2. WGAN: Wasserstein GAN
 
