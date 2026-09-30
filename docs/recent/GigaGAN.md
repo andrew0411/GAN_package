@@ -30,7 +30,7 @@ StyleGAN2를 단순히 키우면 불안정해지는 문제를 sample-adaptive ke
 
 (a) Sample-adaptive kernel selection (Eq. 1–2): filter bank $N$개를 style $w$로 섞은 뒤 StyleGAN2의 modulation/demodulation을 적용한다.
 
-$$K=\sum_{i=1}^{N}K_i\cdot\operatorname{softmax}\big(W_{\mathrm{filter}}^\top w+b_{\mathrm{filter}}\big)_i,\qquad g_{\mathrm{adaconv}}(f,w)=\big((W_{\mathrm{mod}}^\top w+b_{\mathrm{mod}})\otimes K\big)*f$$
+$$K=\sum_{i=1}^{N}K_i\cdot\mathrm{softmax}\big(W_{\mathrm{filter}}^\top w+b_{\mathrm{filter}}\big)_i,\qquad g_{\mathrm{adaconv}}(f,w)=\big((W_{\mathrm{mod}}^\top w+b_{\mathrm{mod}})\otimes K\big)*f$$
 
 선택은 층마다 한 번이라 연산량이 해상도와 분리된다.
 

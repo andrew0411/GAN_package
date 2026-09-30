@@ -46,7 +46,7 @@
 - noise level이 판별기 성격을 정한다: 높은 noise는 전역 구조, 낮은 noise는 질감에 대한 피드백이 된다. $\pi(t;m=1,s=1)$을 채택 (§4.1, Fig. 4).
 - synthetic data: teacher가 고정 CFG로 만든 latent를 "real"로 쓴다. 이 경우 distillation loss를 더해도 이득이 없어 adversarial loss만 남긴다 (§4.2, Fig. 5).
 - 전 과정이 latent 공간이라 decode·encode가 필요 없다.
-- 해석(논문에 식이 없어 서술을 옮긴 것): $\hat t=\operatorname{sigmoid}(m+s\,u)$, $u\sim\mathcal N(0,1)$; $\hat x_{\hat t}=(1-\hat t)\,\hat x_\theta+\hat t\,\varepsilon'$ (rectified flow, §2.1); 판별기 출력은 $\sum_k\mathcal D_{\phi,k}\big(F^{\psi}_k(\hat x_{\hat t},\hat t);\ \hat t,\ c_{\mathrm{pool}}\big)$.
+- 해석(논문에 식이 없어 서술을 옮긴 것): $\hat t=\mathrm{sigmoid}(m+s\,u)$, $u\sim\mathcal N(0,1)$; $\hat x_{\hat t}=(1-\hat t)\,\hat x_\theta+\hat t\,\varepsilon'$ (rectified flow, §2.1); 판별기 출력은 $\sum_k\mathcal D_{\phi,k}\big(F^{\psi}_k(\hat x_{\hat t},\hat t);\ \hat t,\ c_{\mathrm{pool}}\big)$.
   미확인: adversarial loss의 형태(hinge 여부)와 R1 사용 여부는 본문에 없다. 판별기 설계는 StyleGAN-T와 ADD를 대부분 따른다고만 서술한다. real(합성) latent도 같은 방식으로 재노이즈하는지도 명시되지 않았다.
 
 ### 4.3 ADD vs LADD 비교

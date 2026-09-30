@@ -152,7 +152,7 @@ W(P_r, P_g) = \sup_{\lVert f \rVert_L \le 1} \; \mathbb{E}_{x \sim P_r}\big[f(x)
 ```math
 \mathcal{L}_{C} = \mathbb{E}_{z}\big[f(G(z))\big] - \mathbb{E}_{x}\big[f(x)\big], \qquad
 \mathcal{L}_{G} = -\,\mathbb{E}_{z}\big[f(G(z))\big], \qquad
-w \leftarrow \operatorname{clip}(w, -c, c)
+w \leftarrow \mathrm{clip}(w, -c, c)
 ```
 
 <img src="./resources/WGAN_1.PNG">
@@ -271,7 +271,7 @@ flowchart LR
 ```
 
 ```math
-x_{\text{out}} = (1 - \alpha)\, \operatorname{up}\big(\text{toRGB}_{r/2}(h_{r/2})\big) + \alpha \, \text{toRGB}_{r}(h_{r}), \qquad \alpha: 0 \to 1
+x_{\text{out}} = (1 - \alpha)\, \mathrm{up}\big(\text{toRGB}_{r/2}(h_{r/2})\big) + \alpha \, \text{toRGB}_{r}(h_{r}), \qquad \alpha: 0 \to 1
 ```
 
 Equalized learning rate rescales weights at runtime, and pixelwise feature normalization replaces BatchNorm in $`G`$:
@@ -312,11 +312,11 @@ w''_{ijk} = \frac{w'_{ijk}}{\sqrt{\sum_{i,k} {w'_{ijk}}^{2} + \epsilon}}
 Losses: non-saturating logistic loss, lazy R1 regularization on real samples, and path-length regularization, where $`J_w`$ is the Jacobian of the generator with respect to $`w`$ and $`a`$ is a running mean of the path lengths.
 
 ```math
-\mathcal{L}_D = \mathbb{E}_{z}\big[\operatorname{softplus}(D(G(z)))\big] + \mathbb{E}_{x}\big[\operatorname{softplus}(-D(x))\big] + \frac{\gamma}{2}\,\mathbb{E}_{x}\big[\lVert \nabla_x D(x) \rVert_2^2\big]
+\mathcal{L}_D = \mathbb{E}_{z}\big[\mathrm{softplus}(D(G(z)))\big] + \mathbb{E}_{x}\big[\mathrm{softplus}(-D(x))\big] + \frac{\gamma}{2}\,\mathbb{E}_{x}\big[\lVert \nabla_x D(x) \rVert_2^2\big]
 ```
 
 ```math
-\mathcal{L}_G = \mathbb{E}_{z}\big[\operatorname{softplus}(-D(G(z)))\big] + w_{pl}\,\mathbb{E}_{w,\, y \sim \mathcal{N}(0, I)}\Big[\big(\lVert J_w^{\top} y \rVert_2 - a\big)^2\Big]
+\mathcal{L}_G = \mathbb{E}_{z}\big[\mathrm{softplus}(-D(G(z)))\big] + w_{pl}\,\mathbb{E}_{w,\, y \sim \mathcal{N}(0, I)}\Big[\big(\lVert J_w^{\top} y \rVert_2 - a\big)^2\Big]
 ```
 
 Implementation: 64px, batch 16, R1 every 16 steps with $`\gamma = 0.0002 \cdot \text{size}^2 / \text{batch}`$ by default (the StyleGAN2-ADA heuristic), path-length regularization every 4 steps with $`w_{pl} = 2`$, style mixing with probability 0.9, generator EMA, truncation at sampling time. The FIR up/downsampling (`upfirdn2d`) and the fused leaky ReLU are written in plain PyTorch, without custom CUDA kernels.
@@ -340,7 +340,7 @@ z_q = \arg\min_{z_k \in \mathcal{Z}} \lVert \hat{z}_{ij} - z_k \rVert_2
 ```
 
 ```math
-\mathcal{L}_{VQ} = \mathcal{L}_{rec}(x, \hat{x}) + \big\lVert \operatorname{sg}[E(x)] - z_q \big\rVert_2^2 + \beta \, \big\lVert \operatorname{sg}[z_q] - E(x) \big\rVert_2^2
+\mathcal{L}_{VQ} = \mathcal{L}_{rec}(x, \hat{x}) + \big\lVert \mathrm{sg}[E(x)] - z_q \big\rVert_2^2 + \beta \, \big\lVert \mathrm{sg}[z_q] - E(x) \big\rVert_2^2
 ```
 
 ```math
@@ -348,7 +348,7 @@ z_q = \arg\min_{z_k \in \mathcal{Z}} \lVert \hat{z}_{ij} - z_k \rVert_2
 \lambda = \frac{\lVert \nabla_{G_L} \mathcal{L}_{rec} \rVert}{\lVert \nabla_{G_L} \mathcal{L}_{GAN} \rVert + \delta}
 ```
 
-$`\operatorname{sg}`$ is stop-gradient, gradients pass through the quantizer with the straight-through estimator, and $`\nabla_{G_L}`$ is the gradient at the last decoder layer.
+$`\mathrm{sg}`$ is stop-gradient, gradients pass through the quantizer with the straight-through estimator, and $`\nabla_{G_L}`$ is the gradient at the last decoder layer.
 
 Implementation: $`\mathcal{L}_{rec}`$ = L1 + VGG16 perceptual distance (channel-normalized features, without the learned linear heads of LPIPS), hinge loss for the discriminator, $`\lambda`$ scaled by 0.8 and enabled after 10k iterations, 128px input with downsampling factor 8 (16×16 codes), codebook 1024 × 64, $`\beta = 0.25`$, learning rate 4.5e-6 × batch size.
 
@@ -435,7 +435,7 @@ Anomaly scoring (`detect.py`), following the MIT Orion reference implementation:
 2. Reconstruction error $`RE(t)`$: dynamic time warping between $`x`$ and $`\hat{x}`$ over a 10-step window (default), or point-wise or area difference.
 
 ```math
-\operatorname{DTW}(a, b) = \sqrt{\min_{\pi} \sum_{(i, j) \in \pi} (a_i - b_j)^2}
+\mathrm{DTW}(a, b) = \sqrt{\min_{\pi} \sum_{(i, j) \in \pi} (a_i - b_j)^2}
 ```
 
 3. Standardize both signals, with $`\mu_{IQR}`$ the mean of the critic scores inside the interquartile range:

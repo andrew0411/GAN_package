@@ -33,7 +33,7 @@ reparameterization $y_g=\sqrt{\bar\alpha_t}\,G_\theta(z)+\sqrt{1-\bar\alpha_t}\,
 
 Adaptive diffusion (Eq. 5): D가 real을 과신하면 $T$를 늘려 과제를 어렵게 만든다.
 
-$$r_d=\mathbb E_{y,t}\big[\operatorname{sign}\big(D_\phi(y,t)-0.5\big)\big],\qquad T\leftarrow T+\operatorname{sign}(r_d-d_{\mathrm{target}})\cdot C$$
+$$r_d=\mathbb E_{y,t}\big[\mathrm{sign}\big(D_\phi(y,t)-0.5\big)\big],\qquad T\leftarrow T+\mathrm{sign}(r_d-d_{\mathrm{target}})\cdot C$$
 
 - $r_d$는 ADA(Karras et al. 2020a)의 overfitting 지표와 같다. 4 minibatch마다 갱신하고 $[T_{\min},T_{\max}]$로 자른다.
 - $t$ 분포 $p_\pi$ (Eq. 6): uniform $1/T$ 또는 priority $t/\sum_{s=1}^{T}s$ (큰 $t$에 가중).
