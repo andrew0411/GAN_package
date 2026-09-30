@@ -82,7 +82,7 @@ def base_parser(description: str, **defaults: Any) -> argparse.ArgumentParser:
     g = p.add_argument_group("runtime")
     g.add_argument("--seed", type=int, default=0)
     g.add_argument("--device", type=str, default="auto", help="auto | cpu | cuda | cuda:N")
-    g.add_argument("--num_workers", type=int, default=4)
+    g.add_argument("--num_workers", type=nonneg_int, default=4)
 
     g = p.add_argument_group("logging")
     g.add_argument("--out_dir", type=str, default="runs", help="산출물 루트: <out_dir>/<model>/<run_name>/")
