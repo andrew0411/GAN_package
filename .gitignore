@@ -1,0 +1,23 @@
+# Datasets: DATA_ROOT 환경변수 경로에 둔다. repo에 커밋하지 않는다
+dataset/
+datasets/
+/data/
+
+# 학습 산출물
+runs/
+logs/
+wandb/
+*.ckpt
+*.pt
+*.pth
+*.pkl
+*.pth.tar
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# 세션 진행 기록 (로컬 전용)
+progress.md
