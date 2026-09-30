@@ -1,4 +1,4 @@
-"""DCGAN (Radford 2016) Generator / Discriminator. 0~3, 10, 11번 폴더가 공유한다.
+"""DCGAN (Radford 2016) Generator / Discriminator. 1~3, 10, 11번 폴더가 공유한다 (0번은 자체 MLP).
 
 채널 공식 (image_size = S, features = f):
 - Generator: 해상도 r(4, 8, …, S/2)의 채널 = f · (S / r)
