@@ -208,7 +208,6 @@ def main(argv: list[str] | None = None) -> None:
     seed_everything(args.seed)
     device = get_device(args.device)
     run_dir = resolve_run_dir(args, "ProGAN")
-    save_config(vars(args), run_dir)
 
     batch_sizes = parse_batch_sizes(args.batch_sizes)
     max_depth = res_to_depth(args.max_res)
@@ -247,6 +246,7 @@ def main(argv: list[str] | None = None) -> None:
             f"alpha {ckpt['alpha']:.3f}, images {start_images:,}, step {step})",
             flush=True,
         )
+    save_config(vars(args), run_dir)  # resume 구조 검사를 통과한 뒤에 기록한다
 
     print(
         f"device={device} | run_dir={run_dir} | G {count_params(G):,} params, D {count_params(D):,} params | "
