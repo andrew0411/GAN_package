@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import random
 from datetime import datetime
@@ -50,6 +51,31 @@ def make_run_dir(out_dir: str | Path, model_name: str, run_name: str | None = No
     (run_dir / "samples").mkdir(parents=True, exist_ok=True)
     (run_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
     return run_dir
+
+
+def resolve_run_dir(args: argparse.Namespace, model_name: str) -> Path:
+    """이번 실행의 run 디렉터리를 정한다.
+
+    - `--resume`이 있고 `--run_name`이 없으면: checkpoint가 `<run_dir>/checkpoints/` 안에 있다는 전제로
+      `<run_dir>`(= checkpoint 경로의 parent.parent)를 재사용해 로그·샘플을 이어 쓴다.
+      `samples/`, `checkpoints/`가 없으면 만든다.
+    - 그 외: `make_run_dir(args.out_dir, model_name, args.run_name)`로 새로(또는 지정 이름으로) 만든다.
+    """
+    resume = getattr(args, "resume", None)
+    if resume and getattr(args, "run_name", None) is None:
+        ckpt = Path(resume).expanduser().resolve()
+        if not ckpt.is_file():
+            raise FileNotFoundError(f"--resume checkpoint가 없습니다: '{ckpt}'")
+        if ckpt.parent.name != "checkpoints":
+            raise ValueError(
+                f"--resume 경로가 <run_dir>/checkpoints/ 아래가 아닙니다: '{ckpt}'. "
+                "run 디렉터리를 새로 만들려면 --run_name을 함께 주십시오."
+            )
+        run_dir = ckpt.parent.parent
+        (run_dir / "samples").mkdir(parents=True, exist_ok=True)
+        (run_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
+        return run_dir
+    return make_run_dir(args.out_dir, model_name, getattr(args, "run_name", None))
 
 
 def save_config(config: dict[str, Any], run_dir: Path) -> None:

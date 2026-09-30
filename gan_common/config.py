@@ -21,15 +21,24 @@ def str2bool(v: str) -> bool:
     raise argparse.ArgumentTypeError(f"boolean 값이 필요합니다: {v!r}")
 
 
-def positive_int(v: str) -> int:
-    """1 이상의 정수만 받는 argparse `type`. 주기 인자(`step % log_every`)의 ZeroDivisionError를 막는다."""
+def _int_at_least(v: str, lo: int) -> int:
     try:
         n = int(v)
     except ValueError:
         raise argparse.ArgumentTypeError(f"정수가 필요합니다: {v!r}") from None
-    if n < 1:
-        raise argparse.ArgumentTypeError(f"1 이상의 정수가 필요합니다: {v!r}")
+    if n < lo:
+        raise argparse.ArgumentTypeError(f"{lo} 이상의 정수가 필요합니다: {v!r}")
     return n
+
+
+def positive_int(v: str) -> int:
+    """1 이상의 정수만 받는 argparse `type`. 주기 인자(`step % log_every`)의 ZeroDivisionError를 막는다."""
+    return _int_at_least(v, 1)
+
+
+def nonneg_int(v: str) -> int:
+    """0 이상의 정수만 받는 argparse `type`. 0이 '끔'을 뜻하는 인자(`--keep_every`)에 쓴다."""
+    return _int_at_least(v, 0)
 
 
 def base_parser(description: str, **defaults: Any) -> argparse.ArgumentParser:
@@ -46,7 +55,19 @@ def base_parser(description: str, **defaults: Any) -> argparse.ArgumentParser:
 
     g = p.add_argument_group("data")
     g.add_argument("--data_root", type=str, default=None, help="데이터 루트. 없으면 DATA_ROOT env, 그다음 ~/data")
-    g.add_argument("--dataset", type=str, default="mnist", help="mnist | fashion_mnist | cifar10 | celeba | folder | fake")
+    g.add_argument(
+        "--dataset",
+        type=str,
+        default="mnist",
+        help="mnist | fashion_mnist | cifar10 | celeba | folder | fake. "
+        "모델 폴더가 자체 데이터셋 이름(예: facades, horse2zebra)을 정의할 수 있다",
+    )
+    g.add_argument(
+        "--data_path",
+        type=str,
+        default=None,
+        help="--dataset folder일 때 ImageFolder 루트. 상대 경로가 현재 위치에 없으면 DATA_ROOT 기준으로 찾는다",
+    )
     g.add_argument("--image_size", type=int, default=64)
     g.add_argument("--channels", type=int, default=1)
     g.add_argument("--download", action="store_true", help="torchvision 데이터셋이 없으면 내려받는다")
@@ -69,6 +90,12 @@ def base_parser(description: str, **defaults: Any) -> argparse.ArgumentParser:
     g.add_argument("--log_every", type=positive_int, default=100, help="scalar 로깅 주기 (step)")
     g.add_argument("--sample_every", type=positive_int, default=500, help="샘플 이미지 저장 주기 (step)")
     g.add_argument("--save_every", type=positive_int, default=1, help="checkpoint 저장 주기 (epoch)")
+    g.add_argument(
+        "--keep_every",
+        type=nonneg_int,
+        default=0,
+        help="저장 N회마다 번호 붙은 checkpoint 사본을 남긴다. 0이면 last.pt만 유지",
+    )
     g.add_argument("--wandb", action="store_true", help="W&B 로깅 사용")
     g.add_argument("--wandb_project", type=str, default="GAN_package")
     g.add_argument("--resume", type=str, default=None, help="이어서 학습할 checkpoint 경로")

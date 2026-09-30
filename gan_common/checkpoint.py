@@ -8,11 +8,14 @@
 from __future__ import annotations
 
 import os
+import shutil
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
 import torch
+
+__all__ = ["load_checkpoint", "save_checkpoint", "save_rolling_checkpoint"]
 
 # weights_only 로더가 받아주는 타입. subclass(numpy.float64 ⊂ float, namedtuple ⊂ tuple 등)는
 # 거부되므로 isinstance가 아니라 정확한 type으로 비교한다 (Tensor·Parameter만 isinstance).
@@ -59,6 +62,25 @@ def save_checkpoint(path: str | Path, **state: Any) -> None:
     tmp = path.with_name(path.name + ".tmp")
     torch.save(state, tmp)
     os.replace(tmp, path)
+
+
+def save_rolling_checkpoint(ckpt_dir: str | Path, index: int, keep_every: int = 0, **state: Any) -> Path:
+    """`<ckpt_dir>/last.pt`를 덮어쓰고, `keep_every > 0`이고 `index % keep_every == 0`이면
+    `ckpt_{index:07d}.pt` 사본도 남긴다. `last.pt` 경로를 돌려준다.
+
+    `index`는 호출자가 세는 저장 번호(보통 epoch)다. 사본은 다시 직렬화하지 않고 `last.pt`를 파일 복사한다.
+    """
+    if keep_every < 0:
+        raise ValueError(f"keep_every는 0 이상이어야 합니다: {keep_every}")
+    ckpt_dir = Path(ckpt_dir)
+    last = ckpt_dir / "last.pt"
+    save_checkpoint(last, **state)
+    if keep_every > 0 and index % keep_every == 0:
+        numbered = ckpt_dir / f"ckpt_{index:07d}.pt"
+        tmp = numbered.with_name(numbered.name + ".tmp")
+        shutil.copyfile(last, tmp)
+        os.replace(tmp, numbered)
+    return last
 
 
 def load_checkpoint(path: str | Path, map_location: Any = "cpu") -> dict[str, Any]:

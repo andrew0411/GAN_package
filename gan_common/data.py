@@ -237,8 +237,9 @@ def _check_sizes(load_size: int, crop_size: int) -> None:
 class PairedImageDataset(Dataset):
     """pix2pix용. `root/phase/*.jpg` 각 파일이 [A | B]를 좌우로 붙인 이미지다.
 
-    train phase: A·B에 같은 resize → random crop → flip을 적용한다 (픽셀 정렬 유지).
-    그 외 phase: crop_size로 resize만 한다.
+    augment 시: A·B에 같은 resize(load_size) → random crop → flip을 적용한다 (픽셀 정렬 유지).
+    augment 아닐 때: crop_size로 resize만 한다.
+    `augment=None`이면 `phase == "train"`일 때만 augment한다. False면 train split도 resize만 한다.
     반환: `{"A", "B", "A_path", "B_path"}`. `direction="BtoA"`면 A·B를 바꿔 준다.
     """
 
@@ -250,6 +251,8 @@ class PairedImageDataset(Dataset):
         load_size: int = 286,
         crop_size: int = 256,
         flip: bool = True,
+        *,
+        augment: bool | None = None,
     ) -> None:
         if direction not in ("AtoB", "BtoA"):
             raise ValueError(f"direction은 AtoB 또는 BtoA: {direction!r}")
@@ -260,6 +263,7 @@ class PairedImageDataset(Dataset):
         self.load_size = load_size
         self.crop_size = crop_size
         self.flip = flip
+        self.augment = phase == "train" if augment is None else augment
         self.paths = _list_images(self.root / phase)
 
     def __len__(self) -> int:
@@ -271,7 +275,7 @@ class PairedImageDataset(Dataset):
         w, h = ab.size
         a = ab.crop((0, 0, w // 2, h))
         b = ab.crop((w // 2, 0, w, h))
-        params = _random_params(self.load_size, self.crop_size, self.flip) if self.phase == "train" else None
+        params = _random_params(self.load_size, self.crop_size, self.flip) if self.augment else None
         img_a = _preprocess(a, self.load_size, self.crop_size, params)  # (3, crop, crop)
         img_b = _preprocess(b, self.load_size, self.crop_size, params)
         if self.direction == "BtoA":
@@ -283,7 +287,8 @@ class UnpairedImageDataset(Dataset):
     """CycleGAN용. `root/{phase}A`, `root/{phase}B`의 서로 짝이 없는 이미지.
 
     길이는 max(|A|, |B|). A는 index 순환, B는 `serial=False`면 무작위로 뽑아 짝 고정을 피한다.
-    train phase에서는 A·B 각각 독립적으로 resize → random crop → flip.
+    augment 시: A·B 각각 독립적으로 resize(load_size) → random crop → flip. 아닐 때: crop_size로 resize만.
+    `augment=None`이면 `phase == "train"`일 때만 augment한다. False면 train split도 resize만 한다.
     반환: `{"A", "B", "A_path", "B_path"}`.
     """
 
@@ -295,6 +300,8 @@ class UnpairedImageDataset(Dataset):
         crop_size: int = 256,
         flip: bool = True,
         serial: bool = False,
+        *,
+        augment: bool | None = None,
     ) -> None:
         _check_sizes(load_size, crop_size)
         self.root = Path(root).expanduser()
@@ -303,6 +310,7 @@ class UnpairedImageDataset(Dataset):
         self.crop_size = crop_size
         self.flip = flip
         self.serial = serial
+        self.augment = phase == "train" if augment is None else augment
         self.paths_a = _list_images(self.root / f"{phase}A")
         self.paths_b = _list_images(self.root / f"{phase}B")
 
@@ -315,9 +323,8 @@ class UnpairedImageDataset(Dataset):
             path_b = self.paths_b[index % len(self.paths_b)]
         else:
             path_b = self.paths_b[random.randint(0, len(self.paths_b) - 1)]
-        train = self.phase == "train"
-        params_a = _random_params(self.load_size, self.crop_size, self.flip) if train else None
-        params_b = _random_params(self.load_size, self.crop_size, self.flip) if train else None
+        params_a = _random_params(self.load_size, self.crop_size, self.flip) if self.augment else None
+        params_b = _random_params(self.load_size, self.crop_size, self.flip) if self.augment else None
         img_a = _preprocess(_load_rgb(path_a), self.load_size, self.crop_size, params_a)  # (3, crop, crop)
         img_b = _preprocess(_load_rgb(path_b), self.load_size, self.crop_size, params_b)
         return {"A": img_a, "B": img_b, "A_path": str(path_a), "B_path": str(path_b)}

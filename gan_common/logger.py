@@ -16,7 +16,10 @@ _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]')  # Windows 파일명에 �
 
 
 class Logger:
-    """scalar·이미지 로깅. 산출물: `run_dir/tb/`(TensorBoard), `run_dir/samples/*.png`, W&B run(옵션)."""
+    """scalar·이미지 로깅. 산출물: `run_dir/tb/`(TensorBoard), `run_dir/samples/*.png`, W&B run(옵션).
+
+    `with Logger(...) as logger:`로 쓰면 예외가 나도 `close()`가 호출된다.
+    """
 
     def __init__(
         self,
@@ -32,6 +35,7 @@ class Logger:
         self.sample_dir = self.run_dir / "samples"
         self.sample_dir.mkdir(parents=True, exist_ok=True)
         self.writer = SummaryWriter(log_dir=str(self.run_dir / "tb"))
+        self._closed = False
 
         self._wandb = None
         self._run = None
@@ -68,8 +72,18 @@ class Logger:
             self._run.log({tag: self._wandb.Image(array)}, step=step)
 
     def close(self) -> None:
-        """TensorBoard writer와 W&B run을 닫는다."""
+        """TensorBoard를 flush 후 닫고 W&B run을 끝낸다. 여러 번 호출해도 안전하다."""
+        if self._closed:
+            return
+        self._closed = True
+        self.writer.flush()
         self.writer.close()
         if self._run is not None:
             self._run.finish()
             self._run = None
+
+    def __enter__(self) -> Logger:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
