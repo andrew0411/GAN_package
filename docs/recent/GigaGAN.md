@@ -28,22 +28,26 @@ StyleGAN2를 단순히 키우면 불안정해지는 문제를 sample-adaptive ke
 
 ## 4. 핵심 아이디어
 
-(a) Sample-adaptive kernel selection (Eq. 1–2): filter bank $N$개를 style $w$로 섞은 뒤 StyleGAN2의 modulation/demodulation을 적용한다.
+(a) Sample-adaptive kernel selection (Eq. 1–2): filter bank $`N`$개를 style $`w`$로 섞은 뒤 StyleGAN2의 modulation/demodulation을 적용한다.
 
-$$K=\sum_{i=1}^{N}K_i\cdot\mathrm{softmax}\big(W_{\mathrm{filter}}^\top w+b_{\mathrm{filter}}\big)_i,\qquad g_{\mathrm{adaconv}}(f,w)=\big((W_{\mathrm{mod}}^\top w+b_{\mathrm{mod}})\otimes K\big)*f$$
+```math
+K=\sum_{i=1}^{N}K_i\cdot\mathrm{softmax}\big(W_{\mathrm{filter}}^\top w+b_{\mathrm{filter}}\big)_i,\qquad g_{\mathrm{adaconv}}(f,w)=\big((W_{\mathrm{mod}}^\top w+b_{\mathrm{mod}})\otimes K\big)*f
+```
 
 선택은 층마다 한 번이라 연산량이 해상도와 분리된다.
 
 (b) Attention과 conv의 교차 배치 (Eq. 5):
 
-$$f_{\ell+1}=g^{\ell}_{\mathrm{xa}}\Big(g^{\ell}_{\mathrm{attn}}\big(g^{\ell}_{\mathrm{adaconv}}(f_\ell,w),\,w\big),\ t_{\mathrm{local}}\Big)$$
+```math
+f_{\ell+1}=g^{\ell}_{\mathrm{xa}}\Big(g^{\ell}_{\mathrm{attn}}\big(g^{\ell}_{\mathrm{adaconv}}(f_\ell,w),\,w\big),\ t_{\mathrm{local}}\Big)
+```
 
 - self-attention은 dot product 대신 L2 distance를 logit으로 써서 Lipschitz 성질을 돕는다. key·query 행렬 공유, weight decay, equalized lr, 작은 residual gain을 함께 쓴다. 단순히 attention을 넣으면 학습이 붕괴한다고 저자들은 서술한다.
 - cross-attention은 feature를 query, 단어 임베딩을 key·value로 쓴다.
 
-(c) 텍스트 조건 (Eq. 3–4): frozen CLIP ViT-L/14의 penultimate feature(77 token × 768) → 학습형 attention layer $T$ → $t_{\mathrm{local}}$(EOT 제외 단어들), $t_{\mathrm{global}}$(EOT). $w=M(z,t_{\mathrm{global}})$, $z\in\mathbb R^{128}$, $x=\tilde G(w,t_{\mathrm{local}})$.
+(c) 텍스트 조건 (Eq. 3–4): frozen CLIP ViT-L/14의 penultimate feature(77 token × 768) → 학습형 attention layer $`T`$ → $`t_{\mathrm{local}}`$(EOT 제외 단어들), $`t_{\mathrm{global}}`$(EOT). $`w=M(z,t_{\mathrm{global}})`$, $`z\in\mathbb R^{128}`$, $`x=\tilde G(w,t_{\mathrm{local}})`$.
 
-(d) G가 image pyramid $L=5$ (64, 32, 16, 8, 4 px)를 출력하고 레벨마다 독립적으로 GAN loss를 받는다.
+(d) G가 image pyramid $`L=5`$ (64, 32, 16, 8, 4 px)를 출력하고 레벨마다 독립적으로 GAN loss를 받는다.
 
 (e) 2-stage: 64px base generator + GAN upsampler(64→512, 또는 128→1024의 8배 모델).
 
@@ -51,29 +55,33 @@ $$f_{\ell+1}=g^{\ell}_{\mathrm{xa}}\Big(g^{\ell}_{\mathrm{attn}}\big(g^{\ell}_{\
 
 Multi-scale input, multi-scale output loss (Eq. 6):
 
-$$\mathcal V_{\mathrm{MS\text{-}I/O}}(G,D)=\sum_{i=0}^{L-1}\sum_{j=i+1}^{L}\Big[\mathcal V_{\mathrm{GAN}}(G_i,D_{ij})+\mathcal V_{\mathrm{match}}(G_i,D_{ij})\Big]$$
+```math
+\mathcal V_{\mathrm{MS\text{-}I/O}}(G,D)=\sum_{i=0}^{L-1}\sum_{j=i+1}^{L}\Big[\mathcal V_{\mathrm{GAN}}(G_i,D_{ij})+\mathcal V_{\mathrm{match}}(G_i,D_{ij})\Big]
+```
 
-- $\mathcal V_{\mathrm{GAN}}$: non-saturating loss (Table A2의 표기는 Logistic).
-- Matching-aware loss (Eq. 8): real 이미지 $x$와 무작위 캡션 $\hat c$의 쌍, $G(c)$와 $\hat c$의 쌍을 모두 fake로 취급한다. G 쪽에도 거는 것이 핵심이다 (Table 1: D에만 27.29, G·D 모두 21.66).
+- $`\mathcal V_{\mathrm{GAN}}`$: non-saturating loss (Table A2의 표기는 Logistic).
+- Matching-aware loss (Eq. 8): real 이미지 $`x`$와 무작위 캡션 $`\hat c`$의 쌍, $`G(c)`$와 $`\hat c`$의 쌍을 모두 fake로 취급한다. G 쪽에도 거는 것이 핵심이다 (Table 1: D에만 27.29, G·D 모두 21.66).
 - CLIP contrastive loss (Eq. 9):
 
-$$\mathcal L_{\mathrm{CLIP}}=\mathbb E_{\{c_n\}}\Big[-\log\frac{\exp\big(E_{\mathrm{img}}(G(c_0))^\top E_{\mathrm{txt}}(c_0)\big)}{\sum_n\exp\big(E_{\mathrm{img}}(G(c_0))^\top E_{\mathrm{txt}}(c_n)\big)}\Big]$$
+```math
+\mathcal L_{\mathrm{CLIP}}=\mathbb E_{\{c_n\}}\Big[-\log\frac{\exp\big(E_{\mathrm{img}}(G(c_0))^\top E_{\mathrm{txt}}(c_0)\big)}{\sum_n\exp\big(E_{\mathrm{img}}(G(c_0))^\top E_{\mathrm{txt}}(c_n)\big)}\Big]
+```
 
-- Vision-aided adversarial loss $\mathcal L_{\mathrm{Vision}}$: frozen CLIP image encoder(Table A2: ViT-B/32)의 중간 특징 + 3x3 conv head. 조건은 modulation으로 넣고, Projected GAN의 고정 random projection을 추가한다.
-- 최종 목적: $\mathcal V=\mathcal V_{\mathrm{MS\text{-}I/O}}+\mathcal L_{\mathrm{CLIP}}+\mathcal L_{\mathrm{Vision}}$.
-- Regularizer·최적화 (Table A2, T2I 64px): R1 strength 0.2048–2.048, R1 interval 16 (lazy), attention weight decay 0.01, AdamW lr 0.0025, $\beta=(0,0.99)$, G EMA 0.9999, batch 512–1024, 1350k iterations, A100 96–128장.
+- Vision-aided adversarial loss $`\mathcal L_{\mathrm{Vision}}`$: frozen CLIP image encoder(Table A2: ViT-B/32)의 중간 특징 + 3x3 conv head. 조건은 modulation으로 넣고, Projected GAN의 고정 random projection을 추가한다.
+- 최종 목적: $`\mathcal V=\mathcal V_{\mathrm{MS\text{-}I/O}}+\mathcal L_{\mathrm{CLIP}}+\mathcal L_{\mathrm{Vision}}`$.
+- Regularizer·최적화 (Table A2, T2I 64px): R1 strength 0.2048–2.048, R1 interval 16 (lazy), attention weight decay 0.01, AdamW lr 0.0025, $`\beta=(0,0.99)`$, G EMA 0.9999, batch 512–1024, 1350k iterations, A100 96–128장.
 - Upsampler: 같은 loss에 LPIPS 추가 (64→512는 weight 10), vision-aided D는 쓰지 않고, real·생성 입력 간 차이를 줄이려 Gaussian noise augmentation을 건다.
 
 ## 6. 구조
 
-Generator: mapping $M$ (4층) + synthesis network (해상도별로 adaconv → self-attn → cross-attn 블록을 여러 개 쌓음). style mixing과 path length regularization은 끈다 (StyleGAN-XL을 따름). T2I 64px base G는 652.5M.
+Generator: mapping $`M`$ (4층) + synthesis network (해상도별로 adaconv → self-attn → cross-attn 블록을 여러 개 쌓음). style mixing과 path length regularization은 끈다 (StyleGAN-XL을 따름). T2I 64px base G는 652.5M.
 
 Discriminator (§3.3, Fig. 5):
 
-- text branch: CLIP + 학습형 attention, global descriptor $t_D$만 쓴다.
-- image branch $\phi$: 층마다 self-attention + stride-2 conv, 출력 해상도 32, 16, 8, 4, 1.
-- pyramid 레벨 $x_i$를 $\phi$ 중간으로 넣고(late entry) 이후 모든 스케일 $j>i$에서 예측한다(early exit). 총 $L(L+1)/2=15$개 예측이다.
-- 예측 함수 (Eq. 7): $D_{ij}(x,c)=\psi_j\big(\phi_{i\to j}(x_i),t_D\big)+\mathrm{Conv}_{1\times1}\big(\phi_{i\to j}(x_i)\big)$. $\psi_j$는 4층 1x1 modulated conv, $\mathrm{Conv}_{1\times1}$은 무조건부 예측 skip이다.
+- text branch: CLIP + 학습형 attention, global descriptor $`t_D`$만 쓴다.
+- image branch $`\phi`$: 층마다 self-attention + stride-2 conv, 출력 해상도 32, 16, 8, 4, 1.
+- pyramid 레벨 $`x_i`$를 $`\phi`$ 중간으로 넣고(late entry) 이후 모든 스케일 $`j>i`$에서 예측한다(early exit). 총 $`L(L+1)/2=15`$개 예측이다.
+- 예측 함수 (Eq. 7): $`D_{ij}(x,c)=\psi_j\big(\phi_{i\to j}(x_i),t_D\big)+\mathrm{Conv}_{1\times1}\big(\phi_{i\to j}(x_i)\big)`$. $`\psi_j`$는 4층 1x1 modulated conv, $`\mathrm{Conv}_{1\times1}`$은 무조건부 예측 skip이다.
 - T2I 64px D 크기 381.4M (Table A2).
 
 Upsampler: asymmetric U-Net (down residual block 3개 + attention을 가진 up block 6개, 같은 해상도 skip). 359.1M. base와 합쳐 약 1.0B.
@@ -138,7 +146,7 @@ Table 2 (COCO2014 zero-shot FID-30k, GigaGAN은 512px 생성 후 256px로 줄여
 RTX 4070 Super 12GB에서의 소규모 재현 (모두 추정):
 
 - 추정: 1B 원 모델 재현은 불가능하다.
-- 추정: 8.StyleGAN2 64px에 adaptive kernel selection($N$=4–8)과 L2 self-attention을 넣고 CIFAR-10 class-conditional로 Table 1식 ablation을 하는 것은 수십 M parameter 규모로 12GB에서 가능하다.
+- 추정: 8.StyleGAN2 64px에 adaptive kernel selection($`N`$=4–8)과 L2 self-attention을 넣고 CIFAR-10 class-conditional로 Table 1식 ablation을 하는 것은 수십 M parameter 규모로 12GB에서 가능하다.
 - 추정: MS-I/O D는 추가 예측이 주로 저해상도라 메모리 부담이 크지 않다. 이는 논문 §3.3의 서술에서 추론한 것이다.
 - 추정: CLIP loss와 vision-aided D는 frozen CLIP을 추가로 올려야 하므로 batch를 줄여야 할 수 있다.
 

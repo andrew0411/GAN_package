@@ -28,25 +28,25 @@
 - LADD가 지적하는 ADD의 한계 (§1):
   - frozen DINOv2 때문에 판별기 학습 해상도가 518×518로 묶인다.
   - 판별기 피드백을 전역 형태 대 국소 질감 쪽으로 조절할 수단이 없다.
-  - latent diffusion을 distill할 때도 판별기가 RGB에서 동작하므로 decode가 필요하고, 이것이 $512^2$ 초과 학습을 가로막는다.
+  - latent diffusion을 distill할 때도 판별기가 RGB에서 동작하므로 decode가 필요하고, 이것이 $`512^2`$ 초과 학습을 가로막는다.
 
 ## 4. 핵심 아이디어
 
 ### 4.1 ADD
 
-세 네트워크: student $\hat x_\theta$ (사전학습 DM으로 초기화), 학습형 판별기 head $\mathcal D_{\phi,k}$, frozen teacher $\psi$ (§3.1, Fig. 2).
+세 네트워크: student $`\hat x_\theta`$ (사전학습 DM으로 초기화), 학습형 판별기 head $`\mathcal D_{\phi,k}`$, frozen teacher $`\psi`$ (§3.1, Fig. 2).
 
-- 입력은 real 이미지를 forward diffusion한 $x_s=\alpha_s x_0+\sigma_s\epsilon$. $s$는 student timestep 집합 $T_{\mathrm{student}}=\{\tau_1,\dots,\tau_N\}$ ($N=4$)에서 균등 샘플하고, $\tau_N=1000$과 zero-terminal SNR을 강제해 추론 시 순수 noise에서 출발할 수 있게 한다.
-- 전체 목적 (Eq. 1): $\mathcal L=\mathcal L^{G}_{\mathrm{adv}}\big(\hat x_\theta(x_s,s),\phi\big)+\lambda\,\mathcal L_{\mathrm{distill}}\big(\hat x_\theta(x_s,s),\psi\big)$, $\lambda=2.5$.
+- 입력은 real 이미지를 forward diffusion한 $`x_s=\alpha_s x_0+\sigma_s\epsilon`$. $`s`$는 student timestep 집합 $`T_{\mathrm{student}}=\{\tau_1,\dots,\tau_N\}`$ ($`N=4`$)에서 균등 샘플하고, $`\tau_N=1000`$과 zero-terminal SNR을 강제해 추론 시 순수 noise에서 출발할 수 있게 한다.
+- 전체 목적 (Eq. 1): $`\mathcal L=\mathcal L^{G}_{\mathrm{adv}}\big(\hat x_\theta(x_s,s),\phi\big)+\lambda\,\mathcal L_{\mathrm{distill}}\big(\hat x_\theta(x_s,s),\psi\big)`$, $`\lambda=2.5`$.
 - 추론 시 classifier-free guidance를 쓰지 않는다. 여러 step으로 결과를 다듬는 능력은 유지된다 (Fig. 4). 미확인: multi-step 추론의 재노이즈 절차는 본문에 명시되지 않았다.
 
 ### 4.2 LADD
 
-- 판별기와 teacher를 하나로 합친다 (§3): 생성 latent를 $\hat t\sim\pi(t;m,s)$ (logit-normal)에서 뽑은 noise level로 재노이즈하고, teacher(MMDiT)에 통과시켜 각 attention block 뒤의 token sequence를 특징으로 쓴다. 각 특징에 독립 head를 붙인다.
-- noise level이 판별기 성격을 정한다: 높은 noise는 전역 구조, 낮은 noise는 질감에 대한 피드백이 된다. $\pi(t;m=1,s=1)$을 채택 (§4.1, Fig. 4).
+- 판별기와 teacher를 하나로 합친다 (§3): 생성 latent를 $`\hat t\sim\pi(t;m,s)`$ (logit-normal)에서 뽑은 noise level로 재노이즈하고, teacher(MMDiT)에 통과시켜 각 attention block 뒤의 token sequence를 특징으로 쓴다. 각 특징에 독립 head를 붙인다.
+- noise level이 판별기 성격을 정한다: 높은 noise는 전역 구조, 낮은 noise는 질감에 대한 피드백이 된다. $`\pi(t;m=1,s=1)`$을 채택 (§4.1, Fig. 4).
 - synthetic data: teacher가 고정 CFG로 만든 latent를 "real"로 쓴다. 이 경우 distillation loss를 더해도 이득이 없어 adversarial loss만 남긴다 (§4.2, Fig. 5).
 - 전 과정이 latent 공간이라 decode·encode가 필요 없다.
-- 해석(논문에 식이 없어 서술을 옮긴 것): $\hat t=\mathrm{sigmoid}(m+s\,u)$, $u\sim\mathcal N(0,1)$; $\hat x_{\hat t}=(1-\hat t)\,\hat x_\theta+\hat t\,\varepsilon'$ (rectified flow, §2.1); 판별기 출력은 $\sum_k\mathcal D_{\phi,k}\big(F^{\psi}_k(\hat x_{\hat t},\hat t);\ \hat t,\ c_{\mathrm{pool}}\big)$.
+- 해석(논문에 식이 없어 서술을 옮긴 것): $`\hat t=\mathrm{sigmoid}(m+s\,u)`$, $`u\sim\mathcal N(0,1)`$; $`\hat x_{\hat t}=(1-\hat t)\,\hat x_\theta+\hat t\,\varepsilon'`$ (rectified flow, §2.1); 판별기 출력은 $`\sum_k\mathcal D_{\phi,k}\big(F^{\psi}_k(\hat x_{\hat t},\hat t);\ \hat t,\ c_{\mathrm{pool}}\big)`$.
   미확인: adversarial loss의 형태(hinge 여부)와 R1 사용 여부는 본문에 없다. 판별기 설계는 StyleGAN-T와 ADD를 대부분 따른다고만 서술한다. real(합성) latent도 같은 방식으로 재노이즈하는지도 명시되지 않았다.
 
 ### 4.3 ADD vs LADD 비교
@@ -57,36 +57,42 @@
 | 학습 공간 | pixel 기준 (distill loss를 pixel에서 계산, 판별기도 RGB) | latent만 |
 | 판별기 특징망 | frozen DINOv2 ViT-S (discriminative 특징) | frozen teacher (generative 특징, attention block마다) |
 | head 구조 | StyleGAN-T 설계를 따름 (LADD 서술상 1D conv) | token을 공간 배치로 되돌린 뒤 2D conv (multi-aspect 대응) |
-| 판별기 조건 | $c_{\mathrm{text}}$ (CLIP ViT-g-14 text) + $c_{\mathrm{img}}$ (DINOv2 ViT-L CLS) | noise level + pooled CLIP embedding |
+| 판별기 조건 | $`c_{\mathrm{text}}`$ (CLIP ViT-g-14 text) + $`c_{\mathrm{img}}`$ (DINOv2 ViT-L CLS) | noise level + pooled CLIP embedding |
 | 학습 데이터 | real 이미지 | teacher의 synthetic latent (고정 CFG) |
-| 보조 loss | score distillation ($\lambda=2.5$, 최종 모델은 NFSD weighting) | T2I에서는 없음. synthetic data를 못 쓰는 inpainting에서만 distill loss 추가 |
-| adversarial loss | hinge + R1 ($\gamma=10^{-5}$, head 입력 특징에 대해) | 미확인 |
-| 판별기 성격 조절 | 수단 없음 (LADD의 지적) | teacher noise 분포 $\pi(t;m,s)$ |
-| 해상도 | $512^2$ 평가 (DINOv2 제약 518) | 최대 $1024^2$, multi-aspect |
+| 보조 loss | score distillation ($`\lambda=2.5`$, 최종 모델은 NFSD weighting) | T2I에서는 없음. synthetic data를 못 쓰는 inpainting에서만 distill loss 추가 |
+| adversarial loss | hinge + R1 ($`\gamma=10^{-5}`$, head 입력 특징에 대해) | 미확인 |
+| 판별기 성격 조절 | 수단 없음 (LADD의 지적) | teacher noise 분포 $`\pi(t;m,s)`$ |
+| 해상도 | $`512^2`$ 평가 (DINOv2 제약 518) | 최대 $`1024^2`$, multi-aspect |
 | 추론 | 1–4 step, CFG 없음 | 1–4 step, unguided, 2·4 step은 consistency sampler |
 | 대표 결과 | ADD-XL 4 step이 SDXL 50 step을 user study 다수 비교에서 이김 | SD3-Turbo 4 step이 SD3 50 step과 이미지 품질 동급, prompt alignment는 약간 낮음 |
 
 ## 5. 학습 목적 함수
 
-ADD (Eq. 2–4). $F_k$는 frozen 특징망의 $k$번째 층 특징, $\mathrm{sg}$는 stop-gradient.
+ADD (Eq. 2–4). $`F_k`$는 frozen 특징망의 $`k`$번째 층 특징, $`\mathrm{sg}`$는 stop-gradient.
 
-$$\mathcal L^{G}_{\mathrm{adv}}=-\mathbb E_{s,\epsilon,x_0}\Big[\sum_k\mathcal D_{\phi,k}\big(F_k(\hat x_\theta(x_s,s))\big)\Big]$$
+```math
+\mathcal L^{G}_{\mathrm{adv}}=-\mathbb E_{s,\epsilon,x_0}\Big[\sum_k\mathcal D_{\phi,k}\big(F_k(\hat x_\theta(x_s,s))\big)\Big]
+```
 
-$$\mathcal L^{D}_{\mathrm{adv}}=\mathbb E_{x_0}\Big[\sum_k\max\big(0,1-\mathcal D_{\phi,k}(F_k(x_0))\big)+\gamma R_1(\phi)\Big]+\mathbb E_{\hat x_\theta}\Big[\sum_k\max\big(0,1+\mathcal D_{\phi,k}(F_k(\hat x_\theta))\big)\Big]$$
+```math
+\mathcal L^{D}_{\mathrm{adv}}=\mathbb E_{x_0}\Big[\sum_k\max\big(0,1-\mathcal D_{\phi,k}(F_k(x_0))\big)+\gamma R_1(\phi)\Big]+\mathbb E_{\hat x_\theta}\Big[\sum_k\max\big(0,1+\mathcal D_{\phi,k}(F_k(\hat x_\theta))\big)\Big]
+```
 
-$$\mathcal L_{\mathrm{distill}}=\mathbb E_{t,\epsilon'}\Big[c(t)\,\big\|\hat x_\theta-\hat x_\psi\big(\mathrm{sg}(\hat x_{\theta,t});t\big)\big\|_2^2\Big],\qquad \hat x_{\theta,t}=\alpha_t\hat x_\theta+\sigma_t\epsilon',\quad \hat x_\psi=\frac{\hat x_{\theta,t}-\sigma_t\hat\epsilon_\psi(\hat x_{\theta,t},t)}{\alpha_t}$$
+```math
+\mathcal L_{\mathrm{distill}}=\mathbb E_{t,\epsilon'}\Big[c(t)\,\big\|\hat x_\theta-\hat x_\psi\big(\mathrm{sg}(\hat x_{\theta,t});t\big)\big\|_2^2\Big],\qquad \hat x_{\theta,t}=\alpha_t\hat x_\theta+\sigma_t\epsilon',\quad \hat x_\psi=\frac{\hat x_{\theta,t}-\sigma_t\hat\epsilon_\psi(\hat x_{\theta,t},t)}{\alpha_t}
+```
 
 - teacher에는 student 출력을 그대로 넣지 않고 다시 diffuse해서 넣는다. 깨끗한 입력은 teacher에게 분포 밖이기 때문이다.
-- $c(t)$: exponential $c(t)=\alpha_t$, SDS weighting, NFSD 세 가지를 비교. $c(t)=\frac{\alpha_t}{2\sigma_t}w(t)$로 두면 이 loss의 gradient가 SDS와 같아진다 (Appendix A).
-- R1은 픽셀이 아니라 각 head의 입력 특징에 대해 계산하며, $128^2$ 초과 해상도에서 특히 도움이 된다고 서술한다.
+- $`c(t)`$: exponential $`c(t)=\alpha_t`$, SDS weighting, NFSD 세 가지를 비교. $`c(t)=\frac{\alpha_t}{2\sigma_t}w(t)`$로 두면 이 loss의 gradient가 SDS와 같아진다 (Appendix A).
+- R1은 픽셀이 아니라 각 head의 입력 특징에 대해 계산하며, $`128^2`$ 초과 해상도에서 특히 도움이 된다고 서술한다.
 - LADD의 목적 함수는 §4.2 참조 (식 미제시).
 
 ## 6. 구조
 
-- ADD student: SD2.1(ablation), SD1.5(비교 실험) 기반 ADD-M 860M, SDXL 기반 ADD-XL 3.1B. 모든 평가는 $512^2$.
-- ADD 판별기: Projected GAN 계열 (LADD §3이 ADD가 Projected GAN paradigm을 쓴다고 명시하며, ADD §3.2의 구조도 이와 같다). frozen ViT 특징망 + 여러 층의 경량 head. projection 방식으로 텍스트·이미지 embedding을 조건화한다. $x_0$ 정보가 들어 있는 $\tau<1000$ 입력에서는 이미지 조건이 student가 입력을 활용하도록 유도한다.
+- ADD student: SD2.1(ablation), SD1.5(비교 실험) 기반 ADD-M 860M, SDXL 기반 ADD-XL 3.1B. 모든 평가는 $`512^2`$.
+- ADD 판별기: Projected GAN 계열 (LADD §3이 ADD가 Projected GAN paradigm을 쓴다고 명시하며, ADD §3.2의 구조도 이와 같다). frozen ViT 특징망 + 여러 층의 경량 head. projection 방식으로 텍스트·이미지 embedding을 조건화한다. $`x_0`$ 정보가 들어 있는 $`\tau<1000`$ 입력에서는 이미지 조건이 student가 입력을 활용하도록 유도한다.
 - LADD 학습 기본값 (§4): student·teacher·data generator 모두 MMDiT depth 24 (약 2B), 10k iterations. 최종 모델은 8B.
-- LADD 학습 timestep (§5): $t\in\{1,0.75,0.5,0.25\}$. $512^2$ 초과 해상도는 처음 500 iteration 동안 낮은 noise만 쓰고($p=[0,0,0.5,0.5]$) 이후 $p=[0.7,0.1,0.1,0.1]$로 바꾼다. multi-aspect는 bucketing(binning).
+- LADD 학습 timestep (§5): $`t\in\{1,0.75,0.5,0.25\}`$. $`512^2`$ 초과 해상도는 처음 500 iteration 동안 낮은 noise만 쓰고($`p=[0,0,0.5,0.5]`$) 이후 $`p=[0.7,0.1,0.1,0.1]`$로 바꾼다. multi-aspect는 bucketing(binning).
 - LADD + DPO (§4.5): teacher에 rank 256 LoRA를 붙여 Diffusion-DPO로 3k iteration 미세조정 → 이 모델로 LADD → student에 같은 DPO-LoRA를 다시 적용.
 
 ## 7. 주요 결과
@@ -115,7 +121,7 @@ ADD ablation (Table 1, COCO zero-shot FID-5k / CLIP score, student 1 step, 4000 
 
 ## 8. 한계
 
-- ADD: 샘플 다양성이 teacher보다 낮다 (Fig. 8 캡션). student가 teacher 성향을 물려받아, SDXL 기반은 FID가 높게 나온다 (Table 1e). 최적 $c(t)$ 선택은 열린 문제로 남긴다.
+- ADD: 샘플 다양성이 teacher보다 낮다 (Fig. 8 캡션). student가 teacher 성향을 물려받아, SDXL 기반은 FID가 높게 나온다 (Table 1e). 최적 $`c(t)`$ 선택은 열린 문제로 남긴다.
 - ADD 구조적 제약 (LADD의 지적): 판별기 해상도 518 제한, RGB decode 필요.
 - LADD: prompt alignment가 teacher보다 떨어진다. 객체 병합·중복, 세밀한 공간 배치, 부정문 처리에서 실패한다 (§6, Fig. 15).
 - LADD 편집 모델은 이미지·텍스트 guidance 강도를 조절할 수 없고, 입력에 지나치게 붙어 큰 변경이 어렵다.
@@ -135,8 +141,8 @@ ADD ablation (Table 1, COCO zero-shot FID-5k / CLIP score, student 1 step, 4000 
 
 RTX 4070 Super 12GB에서의 소규모 재현 (모두 추정):
 
-- 추정: 논문 설정(ADD-M 860M student + 같은 크기 frozen teacher + DINOv2 ViT-S/ViT-L + CLIP ViT-g text encoder, $512^2$, batch 128)은 12GB 단일 GPU에서 불가능에 가깝다. LoRA·gradient checkpointing·작은 batch로 흉내 낼 수는 있으나 논문과 다른 실험이 된다.
-- 추정: 학습용 경로는 MNIST/CIFAR-10 32px에서 (1) 소형 pixel DDPM teacher를 학습하고 (2) 같은 가중치로 student를 초기화한 뒤 (3) 작은 frozen 특징망 + 경량 head, hinge + R1, $\lambda=2.5$, student timestep 4개($\tau_N$=최대 t)로 1·2·4 step을 비교하는 것이다. 12GB에서 충분하다.
+- 추정: 논문 설정(ADD-M 860M student + 같은 크기 frozen teacher + DINOv2 ViT-S/ViT-L + CLIP ViT-g text encoder, $`512^2`$, batch 128)은 12GB 단일 GPU에서 불가능에 가깝다. LoRA·gradient checkpointing·작은 batch로 흉내 낼 수는 있으나 논문과 다른 실험이 된다.
+- 추정: 학습용 경로는 MNIST/CIFAR-10 32px에서 (1) 소형 pixel DDPM teacher를 학습하고 (2) 같은 가중치로 student를 초기화한 뒤 (3) 작은 frozen 특징망 + 경량 head, hinge + R1, $`\lambda=2.5`$, student timestep 4개($`\tau_N`$=최대 t)로 1·2·4 step을 비교하는 것이다. 12GB에서 충분하다.
 - 추정: LADD 흉내는 9.VQGAN latent 위에 소형 latent diffusion teacher를 먼저 학습해야 해서 선행 비용이 크다. teacher 중간 특징에 head를 붙이는 부분 자체는 가볍다.
 
 ## 10. 참고
