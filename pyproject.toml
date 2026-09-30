@@ -1,0 +1,18 @@
+# gan_common 공유 모듈을 editable 설치하기 위한 설정.
+# 설치: repo 루트에서 `pip install -e .` (environment.yml이 자동으로 수행한다)
+# 런타임 의존성(torch 등)은 conda env `gan`이 제공하므로 여기에 적지 않는다.
+# 번호 폴더(0.Simple_GAN 등)는 패키지가 아니라 스크립트 모음이므로 포함하지 않는다.
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gan-common"
+version = "0.1.0"
+description = "Shared PyTorch utilities for the GAN_package learning repository"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gan_common*"]

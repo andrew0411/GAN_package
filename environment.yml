@@ -1,0 +1,26 @@
+# GAN_package 학습 환경 (conda env `gan`)
+# 생성: repo 루트에서 `mamba env create -f environment.yml` → `conda activate gan`
+# torch는 conda가 아니라 pip CUDA 12.4 wheel로 설치한다.
+# 마지막 `-e .`가 gan_common을 editable 설치한다 (pyproject.toml 참조).
+# 버전 근거:
+#   torch·numpy·pillow·matplotlib 핀은 기존 `dl` env에서 공존이 확인된 조합이다.
+#   torchvision 0.21.0은 torch 2.6의 공식 짝이지만 `dl`에 설치돼 있지 않아 공존은 미검증이다.
+#   하한(>=)만 둔 항목은 정확한 버전을 검증하지 않았다 (tensorboard도 `dl`에 없다).
+name: gan
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu124
+      - torch==2.6.0
+      - torchvision==0.21.0
+      - numpy==2.4.6
+      - pillow==12.2.0
+      - matplotlib==3.10.9
+      - tensorboard>=2.17
+      - wandb>=0.17
+      - tqdm>=4.66
+      - pandas>=2.2
+      - -e .
