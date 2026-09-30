@@ -68,7 +68,9 @@ def save_rolling_checkpoint(ckpt_dir: str | Path, index: int, keep_every: int = 
     """`<ckpt_dir>/last.pt`를 덮어쓰고, `keep_every > 0`이고 `index % keep_every == 0`이면
     `ckpt_{index:07d}.pt` 사본도 남긴다. `last.pt` 경로를 돌려준다.
 
-    `index`는 호출자가 세는 저장 번호(보통 epoch)다. 사본은 다시 직렬화하지 않고 `last.pt`를 파일 복사한다.
+    `index`는 호출자가 세는 저장 시점 번호다: epoch 단위로 저장하는 스크립트는 epoch 번호,
+    iteration 단위로 저장하는 스크립트는 iteration 번호를 넘긴다.
+    사본은 다시 직렬화하지 않고 `last.pt`를 파일 복사한다.
     """
     if keep_every < 0:
         raise ValueError(f"keep_every는 0 이상이어야 합니다: {keep_every}")

@@ -89,12 +89,15 @@ def base_parser(description: str, **defaults: Any) -> argparse.ArgumentParser:
     g.add_argument("--run_name", type=str, default=None, help="없으면 timestamp")
     g.add_argument("--log_every", type=positive_int, default=100, help="scalar 로깅 주기 (step)")
     g.add_argument("--sample_every", type=positive_int, default=500, help="샘플 이미지 저장 주기 (step)")
-    g.add_argument("--save_every", type=positive_int, default=1, help="checkpoint 저장 주기 (epoch)")
+    g.add_argument(
+        "--save_every", type=positive_int, default=1,
+        help="checkpoint(last.pt) 저장 주기 (epoch 기반 스크립트는 epoch, iteration 기반은 iteration)",
+    )
     g.add_argument(
         "--keep_every",
         type=nonneg_int,
         default=0,
-        help="저장 N회마다 번호 붙은 checkpoint 사본을 남긴다. 0이면 last.pt만 유지",
+        help="저장 시점의 index(epoch 또는 iteration)가 N의 배수이면 번호 붙은 사본도 남긴다. 0이면 last.pt만 유지",
     )
     g.add_argument("--wandb", action="store_true", help="W&B 로깅 사용")
     g.add_argument("--wandb_project", type=str, default="GAN_package")

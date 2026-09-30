@@ -79,7 +79,21 @@ def resolve_run_dir(args: argparse.Namespace, model_name: str) -> Path:
 
 
 def save_config(config: dict[str, Any], run_dir: Path) -> None:
-    """`run_dir/config.json`에 저장한다. JSON 직렬화가 안 되는 값(Path 등)은 str로 바꾼다."""
-    path = Path(run_dir) / "config.json"
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False, default=str)
+    """`run_dir/config.json`에 저장한다. JSON 직렬화가 안 되는 값(Path 등)은 str로 바꾼다.
+
+    기존 `config.json`(원래 run의 설정)은 절대 덮어쓰지 않는다. 이미 있으면(--resume으로 같은 run에
+    이어 쓰는 경우 등) `config_resume_<YYYYmmdd-HHMMSS>.json`에 저장한다. 그 이름도 있으면 `_1`, `_2`…를 붙인다.
+    """
+    run_dir = Path(run_dir)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    names = ["config.json", f"config_resume_{stamp}.json"]
+    names += (f"config_resume_{stamp}_{i}.json" for i in range(1, 100))
+    for name in names:
+        try:
+            f = (run_dir / name).open("x", encoding="utf-8")  # "x": 파일이 있으면 FileExistsError
+        except FileExistsError:
+            continue
+        with f:
+            json.dump(config, f, indent=2, ensure_ascii=False, default=str)
+        return
+    raise FileExistsError(f"'{run_dir}'에 config_resume_{stamp}*.json 이름이 모두 사용 중입니다.")

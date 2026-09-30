@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import random
 import warnings
+from collections.abc import Iterator
 from pathlib import Path
 
 import torch
@@ -18,6 +19,17 @@ from torchvision import datasets
 from torchvision import transforms as T
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms import functional as TF
+
+__all__ = [
+    "IMG_EXTENSIONS",
+    "PairedImageDataset",
+    "UnpairedImageDataset",
+    "build_image_dataset",
+    "build_loader",
+    "get_data_root",
+    "image_transform",
+    "infinite_batches",
+]
 
 IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".ppm", ".pgm", ".tif", ".tiff", ".webp")
 
@@ -86,11 +98,15 @@ def build_image_dataset(
     """이름으로 이미지 데이터셋을 만든다. 각 샘플은 `(img, label)`.
 
     - `mnist | fashion_mnist | cifar10`: torchvision 데이터셋 (`<data_root>` 아래)
-    - `celeba`: `ImageFolder(<data_root>/celeba)` — 예: `celeba/img_align_celeba/*.jpg`
+    - `celeba`: `ImageFolder(<data_root>/celeba)`. 기대 구조:
+        `$DATA_ROOT/celeba/img_align_celeba/*.jpg` + `$DATA_ROOT/celeba/list_eval_partition.txt`
+      partition 파일(공식 형식 `<filename> <0|1|2>`)이 있으면 train=True → 0(train), train=False → 2(test)
+      파일만 남긴 `Subset`을 돌려준다 (파일명 basename으로 매칭). 파일이 없으면 폴더 전체를 쓰므로
+      train과 test가 같은 이미지가 된다 (train=False일 때 warning).
     - `folder`: `ImageFolder(path)`. 상대 경로가 현재 위치에 없으면 `<data_root>/path`로 본다
     - `fake`: `FakeData` (데이터 없이 파이프라인 점검용)
     - `classes`: 주어지면 해당 label만 남긴 `Subset` (이상탐지에서 normal class만 학습할 때)
-    `celeba`·`folder`·`fake`는 `train` 인자를 무시한다.
+    `folder`·`fake`는 `train` 인자를 무시한다.
     """
     key = name.lower()
     data_root = get_data_root(root)
@@ -107,7 +123,16 @@ def build_image_dataset(
                 "--download 로 내려받거나, DATA_ROOT 환경변수(또는 --data_root)를 데이터가 있는 위치로 지정하십시오."
             ) from e
     elif key == "celeba":
-        ds = _image_folder(data_root / "celeba", image_size, channels)
+        celeba_root = data_root / "celeba"
+        ds = _image_folder(celeba_root, image_size, channels)
+        split_file = celeba_root / "list_eval_partition.txt"
+        if split_file.is_file():
+            ds = _celeba_split(ds, split_file, train)
+        elif not train:
+            warnings.warn(
+                f"'{split_file}'가 없어 CelebA 폴더 전체를 test로 씁니다 (train과 같은 이미지).",
+                stacklevel=2,
+            )
     elif key == "folder":
         if path is None:
             raise ValueError("dataset='folder'에는 path 인자(ImageFolder 루트)가 필요합니다.")
@@ -140,10 +165,36 @@ def _image_folder(folder: Path, image_size: int, channels: int) -> Dataset:
     return datasets.ImageFolder(str(folder), transform=image_transform(image_size, channels, center_crop=True))
 
 
+def _celeba_split(ds: datasets.ImageFolder, split_file: Path, train: bool) -> Subset:
+    """공식 `list_eval_partition.txt`로 train(0) 또는 test(2) 파일만 남긴다."""
+    want = 0 if train else 2
+    names = set()
+    with split_file.open(encoding="utf-8") as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) != 2:
+                continue
+            try:
+                if int(parts[1]) == want:
+                    names.add(parts[0])
+            except ValueError:  # header 등 숫자가 아닌 줄은 건너뛴다
+                continue
+    indices = [i for i, (p, _) in enumerate(ds.samples) if os.path.basename(p) in names]
+    if not indices:
+        raise ValueError(
+            f"'{split_file}'의 partition {want}에 해당하는 이미지가 '{ds.root}'에 없습니다. "
+            "파일명이 img_align_celeba/*.jpg와 일치하는지 확인하십시오."
+        )
+    return Subset(ds, indices)
+
+
 def _filter_classes(ds: Dataset, classes: list[int]) -> Subset:
     """label이 `classes`에 속하는 샘플만 남긴다. `targets` 속성이 없으면(FakeData) 한 번 순회한다."""
     keep = {int(c) for c in classes}
     targets = getattr(ds, "targets", None)
+    if targets is None and isinstance(ds, Subset) and hasattr(ds.dataset, "targets"):
+        base = torch.as_tensor(ds.dataset.targets).tolist()  # CelebA split 등 Subset: 이미지를 읽지 않는다
+        targets = [base[i] for i in ds.indices]
     if targets is None:
         targets = [ds[i][1] for i in range(len(ds))]
     labels = torch.as_tensor(targets).tolist()
@@ -165,13 +216,9 @@ def build_loader(
 
     기본값(shuffle=True, drop_last=True)은 학습용이다. 평가·이상탐지 scoring 루프는
     `shuffle=False, drop_last=False`를 넘겨 모든 샘플을 순서대로 한 번씩 보게 한다.
+    batch가 0개인 loader는 만들지 않는다 (iteration 기반 루프가 무한 반복하므로 ValueError).
     """
-    if drop_last and len(dataset) < batch_size:
-        warnings.warn(
-            f"데이터셋 크기({len(dataset)})가 batch_size({batch_size})보다 작아 drop_last=True면 batch가 0개입니다.",
-            stacklevel=2,
-        )
-    return DataLoader(
+    loader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
@@ -180,6 +227,36 @@ def build_loader(
         pin_memory=torch.cuda.is_available(),
         persistent_workers=num_workers > 0,
     )
+    if len(loader) == 0:
+        raise ValueError(
+            f"batch가 0개입니다: 데이터셋 크기 {len(dataset)}, batch_size {batch_size}, drop_last={drop_last}. "
+            "--batch_size를 데이터셋 크기 이하로 줄이거나, 데이터 경로(DATA_ROOT·--data_root)와 필터(classes)를 확인하십시오."
+        )
+    return loader
+
+
+def infinite_batches(loader: DataLoader) -> Iterator:
+    """loader를 끝없이 다시 돌며 batch를 낸다 (iteration 기반 학습용). 매 pass마다 shuffle이 새로 된다.
+
+    batch가 0개인 loader면 즉시 ValueError를 낸다 (한 pass가 비어도 ValueError).
+    """
+    try:
+        n = len(loader)
+    except TypeError:  # IterableDataset 등 길이를 모르는 경우: 첫 pass에서 확인한다
+        n = None
+    if n == 0:
+        raise ValueError("infinite_batches: batch가 0개인 loader입니다.")
+    return _cycle(loader)
+
+
+def _cycle(loader: DataLoader) -> Iterator:
+    while True:
+        empty = True
+        for batch in loader:
+            empty = False
+            yield batch
+        if empty:
+            raise ValueError("infinite_batches: loader 한 pass에서 batch가 나오지 않았습니다.")
 
 
 # ---------------------------------------------------------------------------
