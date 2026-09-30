@@ -1,15 +1,14 @@
-"""DCGAN (Radford 2016): transposed-conv Generator와 conv Discriminator로 MNIST 64px 숫자를 생성한다.
+"""Simple GAN (Goodfellow 2014): MLP Generator·Discriminator로 MNIST 28px 숫자를 생성한다.
 
-네트워크는 gan_common.networks.dcgan (G: ConvT+BN+ReLU → Tanh, D: Conv+BN+LeakyReLU(0.2) → logit).
 실행 (repo 루트에서 `pip install -e .` 후):
-    cd 1.DCGAN && python train.py --download
-    python train.py --dataset cifar10 --channels 3 --download
-산출물: runs/DCGAN/<run_name|timestamp>/ 아래 config.json, tb/, samples/, checkpoints/
+    cd 0.Simple_GAN && python train.py --download
+    python train.py --data_root dataset            # 예전 로컬 복사본 dataset/MNIST 를 그대로 쓸 때
+산출물: runs/SimpleGAN/<run_name|timestamp>/ 아래 config.json, tb/, samples/, checkpoints/
 checkpoint: 저장할 때마다 checkpoints/last.pt를 덮어쓰고, --keep_every N이면 epoch이 N의 배수일 때
 ckpt_XXXXXXX.pt 사본을 남긴다.
 
 이어서 학습 (--run_name 없이 --resume만 주면 원래 run 폴더에 이어 쓴다):
-    python train.py --resume runs/DCGAN/<run>/checkpoints/last.pt --epochs 10
+    python train.py --resume runs/SimpleGAN/<run>/checkpoints/last.pt --epochs 60
     - --epochs는 총 epoch 수다 (추가할 epoch 수가 아니다)
     - fixed noise는 checkpoint에 저장된 것을 쓰므로 --n_samples는 무시된다
     - RNG 상태는 복원하지 않으므로 끊지 않고 학습한 결과와 bit 단위로 같지는 않다
@@ -28,26 +27,24 @@ from gan_common.config import base_parser, positive_int
 from gan_common.data import build_image_dataset, build_loader
 from gan_common.logger import Logger
 from gan_common.losses import GANLoss
-from gan_common.networks.dcgan import DCGANDiscriminator, DCGANGenerator
 from gan_common.utils import count_params, get_device, resolve_run_dir, save_config, seed_everything
-from gan_common.weights import init_weights
+from model import Discriminator, Generator  # 같은 폴더의 model.py
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = base_parser(
-        "DCGAN on MNIST 64px",
+        "Simple GAN (MLP) on MNIST",
         dataset="mnist",
-        image_size=64,
+        image_size=28,
         channels=1,
-        batch_size=128,
-        epochs=5,
-        lr=2e-4,
-        beta1=0.5,  # DCGAN 논문: beta1 0.9는 학습이 진동해 0.5로 낮춘다
+        batch_size=32,
+        epochs=50,
+        lr=3e-4,
+        beta1=0.9,  # Adam 기본 betas (0.9, 0.999)
         beta2=0.999,
     )
     g = p.add_argument_group("model")
-    g.add_argument("--z_dim", type=int, default=100, help="latent z 차원")
-    g.add_argument("--features", type=int, default=64, help="G·D 기본 채널 수 (DCGANGenerator/Discriminator features)")
+    g.add_argument("--z_dim", type=int, default=64, help="latent z 차원")
     g.add_argument(
         "--n_samples",
         type=positive_int,
@@ -59,8 +56,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 @torch.no_grad()
 def log_samples(logger: Logger, G: nn.Module, fixed_noise: Tensor, step: int) -> None:
-    """fixed noise로 만든 샘플 grid를 기록한다. BatchNorm은 running stats(eval 모드)로 써서
-    batch 구성에 따라 결과가 바뀌지 않게 한다."""
+    """fixed noise로 만든 샘플 grid를 기록한다. eval 모드로 샘플링한다 (BatchNorm·Dropout이 있을 때 대비)."""
     G.eval()
     logger.log_images("fake", G(fixed_noise), step)
     G.train()
@@ -70,10 +66,10 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     seed_everything(args.seed)
     device = get_device(args.device)
-    run_dir = resolve_run_dir(args, "DCGAN")
+    run_dir = resolve_run_dir(args, "SimpleGAN")
     save_config(vars(args), run_dir)
 
-    # 데이터: [-1, 1]로 정규화된 (N, C, 64, 64) 이미지
+    # 데이터: [-1, 1]로 정규화된 (N, 1, 28, 28) 이미지
     dataset = build_image_dataset(
         args.dataset,
         args.image_size,
@@ -84,12 +80,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     loader = build_loader(dataset, args.batch_size, num_workers=args.num_workers)
 
-    # 모델: DCGAN 관례대로 Conv weight N(0, 0.02), BatchNorm weight N(1, 0.02)로 초기화
-    G = DCGANGenerator(args.z_dim, args.channels, args.features, args.image_size)
-    D = DCGANDiscriminator(args.channels, args.features, args.image_size, norm="batch")
-    init_weights(G, "normal", 0.02)
-    init_weights(D, "normal", 0.02)
-    G, D = G.to(device), D.to(device)
+    # 모델: 초기화는 PyTorch 기본값 (원 구현과 동일)
+    img_shape = (args.channels, args.image_size, args.image_size)
+    G = Generator(args.z_dim, img_shape).to(device)
+    D = Discriminator(img_shape).to(device)
     opt_G = torch.optim.Adam(G.parameters(), lr=args.lr, betas=(args.beta1, args.beta2))
     opt_D = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(args.beta1, args.beta2))
     gan_loss = GANLoss("vanilla")
@@ -126,20 +120,22 @@ def main(argv: list[str] | None = None) -> None:
         for epoch in range(start_epoch, args.epochs):
             for real, _ in loader:
                 real = real.to(device, non_blocking=True)
-                n = real.size(0)  # noise batch를 실제 batch 크기에 맞춘다
+                n = real.size(0)
 
                 # ---- Train D: max log D(x) + log(1 - D(G(z)))
                 D.requires_grad_(True)
                 noise = torch.randn(n, args.z_dim, device=device)
-                fake = G(noise)  # (N, C, 64, 64). G step에서 다시 쓰므로 G graph를 남겨 둔다
-                real_logits = D(real)  # (N,)
+                fake = G(noise)  # G step에서 다시 쓰므로 G graph를 남겨 둔다
+                real_logits = D(real)
                 fake_logits = D(fake.detach())  # detach: D step의 gradient가 G로 흘러가지 않게 끊는다
                 loss_D = 0.5 * gan_loss.d_loss(real_logits, fake_logits)  # 원 구현처럼 (real + fake) / 2
                 opt_D.zero_grad()
                 loss_D.backward()
                 opt_D.step()
 
-                # ---- Train G: max log D(G(z)) (non-saturating loss)
+                # ---- Train G: min log(1 - D(G(z))) 대신 max log D(G(z)) (non-saturating loss)
+                # 학습 초반 D가 fake를 쉽게 구분하면 log(1 - D(G(z)))는 gradient가 거의 0이 되지만,
+                # non-saturating 형태는 그때도 gradient가 충분히 남는다
                 D.requires_grad_(False)  # D는 고정. G step에서 D weight gradient는 필요 없다
                 loss_G = gan_loss.g_loss(D(fake))  # D step에서 만든 fake를 갱신된 D에 다시 넣는다
                 opt_G.zero_grad()
@@ -151,7 +147,7 @@ def main(argv: list[str] | None = None) -> None:
                     scalars = {
                         "loss/D": loss_D.item(),
                         "loss/G": loss_G.item(),
-                        "prob/D_real": torch.sigmoid(real_logits.detach()).mean().item(),  # D(x)
+                        "prob/D_real": torch.sigmoid(real_logits.detach()).mean().item(),  # D(x), 1에 가까울수록 real
                         "prob/D_fake": torch.sigmoid(fake_logits.detach()).mean().item(),  # D(G(z))
                     }
                     logger.log_scalars(scalars, global_step)
